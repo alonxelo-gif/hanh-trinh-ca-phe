@@ -141,9 +141,9 @@ footer{padding:23px 0;color:var(--muted);font:10px Arial,sans-serif;letter-spaci
 
   function findVietnameseVoice() {
     const voices = window.speechSynthesis.getVoices();
-    const viVoices = voices.filter(v => /^vi(-|_)/i.test(v.lang) || /Vietnamese|Tiếng Việt|Hoai.?My|Nam.?Minh/i.test(v.name));
-    const preferred = viVoices.find(v => /Google.*Vietnamese|Microsoft.*(Hoai.?My|Nam.?Minh)|Hoai.?My|Nam.?Minh/i.test(v.name));
-    chosenVoice = preferred || viVoices.find(v => /^vi(-|_)/i.test(v.lang)) || null;
+    const viVoices = voices.filter(v => /^vi(-|_)/i.test(v.lang));
+    chosenVoice = viVoices.find(v => /Google|Microsoft/i.test(v.name)) || viVoices[0] || null;
+    return chosenVoice;
   }
 
   function stopReading() {
@@ -171,7 +171,7 @@ footer{padding:23px 0;color:var(--muted);font:10px Arial,sans-serif;letter-spaci
       sentences.forEach(sentence => {
         const part = sentence.trim();
         if (!part) return;
-        if ((current + " " + part).trim().length > 220 && current) {
+        if ((current + " " + part).trim().length > 180 && current) {
           chunks.push(current.trim());
           current = part;
         } else {
@@ -189,15 +189,16 @@ footer{padding:23px 0;color:var(--muted);font:10px Arial,sans-serif;letter-spaci
       return;
     }
     const utterance = new SpeechSynthesisUtterance(readQueue[queueIndex++]);
-    utterance.lang = "vi-VN";
-    if (chosenVoice) utterance.voice = chosenVoice;
-    utterance.rate = 0.9;
-    utterance.pitch = 1.02;
+    utterance.lang = chosenVoice.lang;
+    utterance.voice = chosenVoice;
+    utterance.rate = 0.88;
+    utterance.pitch = 1;
     utterance.volume = 1;
     utterance.onend = speakNext;
     utterance.onerror = (event) => {
       if (event.error === "canceled" || event.error === "interrupted") return;
-      speakNext();
+      stopReading();
+      alert("Giọng đọc tiếng Việt trên máy đang gặp lỗi. Hãy thử Microsoft Edge hoặc cài giọng Tiếng Việt trong Windows.");
     };
     window.speechSynthesis.speak(utterance);
   }
@@ -229,7 +230,13 @@ footer{padding:23px 0;color:var(--muted);font:10px Arial,sans-serif;letter-spaci
         return;
       }
       stopReading();
-      findVietnameseVoice();
+      const voices = window.speechSynthesis.getVoices();
+      const voice = findVietnameseVoice();
+      if (!voice) {
+        alert("Máy tính chưa có giọng đọc Tiếng Việt. Hãy cài giọng Tiếng Việt trong Windows: Settings → Time & language → Speech → Manage voices → Add voices → Vietnamese. Sau đó tải lại website.");
+        return;
+      }
+      chosenVoice = voice;
       readQueue = makeChunks(section);
       queueIndex = 0;
       if (!readQueue.length) return;
