@@ -135,9 +135,21 @@ footer{padding:23px 0;color:var(--muted);font:10px Arial,sans-serif;letter-spaci
 (() => {
   const sectionIds = ["du-nhap", "phin", "huong-vi", "hoi-nhap"];
   let activeButton = null;
+  let readQueue = [];
+  let queueIndex = 0;
+  let chosenVoice = null;
+
+  function findVietnameseVoice() {
+    const voices = window.speechSynthesis.getVoices();
+    const viVoices = voices.filter(v => /^vi(-|_)/i.test(v.lang) || /Vietnamese|Tiếng Việt|Hoai.?My|Nam.?Minh/i.test(v.name));
+    const preferred = viVoices.find(v => /Google.*Vietnamese|Microsoft.*(Hoai.?My|Nam.?Minh)|Hoai.?My|Nam.?Minh/i.test(v.name));
+    chosenVoice = preferred || viVoices.find(v => /^vi(-|_)/i.test(v.lang)) || null;
+  }
 
   function stopReading() {
     window.speechSynthesis.cancel();
+    readQueue = [];
+    queueIndex = 0;
     if (activeButton) {
       activeButton.classList.remove("is-speaking");
       activeButton.textContent = "🔊 Nghe toàn bộ mục";
@@ -146,7 +158,56 @@ footer{padding:23px 0;color:var(--muted);font:10px Arial,sans-serif;letter-spaci
     }
   }
 
-  sectionIds.forEach((id) => {
+  function makeChunks(section) {
+    const copy = section.cloneNode(true);
+    copy.querySelectorAll("button, iframe, script, style").forEach(el => el.remove());
+    const blocks = copy.querySelectorAll("h2,h3,p,li,.kicker,.tag,.caption,.note");
+    const chunks = [];
+    blocks.forEach(block => {
+      const text = (block.innerText || block.textContent || "").replace(/\s+/g, " ").trim();
+      if (!text) return;
+      const sentences = text.match(/[^.!?…]+[.!?…]?/g) || [text];
+      let current = "";
+      sentences.forEach(sentence => {
+        const part = sentence.trim();
+        if (!part) return;
+        if ((current + " " + part).trim().length > 220 && current) {
+          chunks.push(current.trim());
+          current = part;
+        } else {
+          current += (current ? " " : "") + part;
+        }
+      });
+      if (current.trim()) chunks.push(current.trim());
+    });
+    return chunks;
+  }
+
+  function speakNext() {
+    if (!activeButton || queueIndex >= readQueue.length) {
+      stopReading();
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(readQueue[queueIndex++]);
+    utterance.lang = "vi-VN";
+    if (chosenVoice) utterance.voice = chosenVoice;
+    utterance.rate = 0.9;
+    utterance.pitch = 1.02;
+    utterance.volume = 1;
+    utterance.onend = speakNext;
+    utterance.onerror = (event) => {
+      if (event.error === "canceled" || event.error === "interrupted") return;
+      speakNext();
+    };
+    window.speechSynthesis.speak(utterance);
+  }
+
+  if ("speechSynthesis" in window) {
+    findVietnameseVoice();
+    window.speechSynthesis.onvoiceschanged = findVietnameseVoice;
+  }
+
+  sectionIds.forEach(id => {
     const section = document.getElementById(id);
     const heading = section && section.querySelector(".section-head");
     if (!heading) return;
@@ -160,7 +221,7 @@ footer{padding:23px 0;color:var(--muted);font:10px Arial,sans-serif;letter-spaci
 
     button.addEventListener("click", () => {
       if (!("speechSynthesis" in window)) {
-        alert("Trình duyệt này chưa hỗ trợ đọc văn bản. Bạn hãy thử bằng Chrome hoặc Edge.");
+        alert("Trình duyệt này chưa hỗ trợ đọc văn bản. Bạn hãy thử bằng Microsoft Edge hoặc Google Chrome.");
         return;
       }
       if (activeButton === button) {
@@ -168,24 +229,15 @@ footer{padding:23px 0;color:var(--muted);font:10px Arial,sans-serif;letter-spaci
         return;
       }
       stopReading();
-
-      const content = section.cloneNode(true);
-      content.querySelectorAll("button, iframe, script, style").forEach((el) => el.remove());
-      const text = (content.innerText || content.textContent || "").replace(/\s+/g, " ").trim();
-      if (!text) return;
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "vi-VN";
-      utterance.rate = 0.95;
-      utterance.pitch = 1;
-      utterance.onend = stopReading;
-      utterance.onerror = stopReading;
-
+      findVietnameseVoice();
+      readQueue = makeChunks(section);
+      queueIndex = 0;
+      if (!readQueue.length) return;
       activeButton = button;
       button.classList.add("is-speaking");
       button.textContent = "⏹ Dừng đọc";
       button.setAttribute("aria-pressed", "true");
-      window.speechSynthesis.speak(utterance);
+      speakNext();
     });
 
     heading.appendChild(button);
