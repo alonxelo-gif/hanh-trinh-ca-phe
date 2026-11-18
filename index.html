@@ -35,6 +35,14 @@ h2{font-size:clamp(29px,4vw,47px);line-height:1.12;font-weight:400;letter-spacin
 .closing{background:#29251f;color:#f7f3ed;padding:75px 0}.closing .kicker{color:#c5a789}.closing h2{max-width:800px}.closing p{max-width:800px;margin:25px 0 0 auto;color:#d8d0c5;font-size:17px}
 footer{padding:23px 0;color:var(--muted);font:10px Arial,sans-serif;letter-spacing:.13em;text-transform:uppercase}
 @media(max-width:760px){.wrap{width:calc(100% - 30px)}.navlinks{gap:10px;font-size:9px}.hero{grid-template-columns:1fr;padding:48px 0;gap:25px}.hero-img{height:330px}.section{padding:52px 0}.section-head{grid-template-columns:1fr;gap:13px}.prose{margin:0;font-size:16px}.feature{grid-template-columns:1fr;gap:20px}.feature img{height:290px}.cards{grid-template-columns:1fr}.card img{height:250px}.photo-wide{height:240px}.closing p{margin-left:0}}
+
+/* Nút nghe nội dung từng mục */
+.section-head{align-items:start}
+.listen-btn{display:inline-flex;align-items:center;gap:8px;margin-top:18px;padding:11px 16px;border:1px solid var(--coffee);border-radius:3px;background:transparent;color:var(--coffee);font:600 12px Arial,sans-serif;letter-spacing:.04em;cursor:pointer;transition:background .2s,color .2s}
+.listen-btn:hover,.listen-btn.is-speaking{background:var(--coffee);color:#fff}
+.listen-btn:focus-visible{outline:3px solid #b89572;outline-offset:3px}
+@media(max-width:760px){.listen-btn{margin-top:13px}}
+
 </style>
 </head>
 <body>
@@ -122,4 +130,69 @@ footer{padding:23px 0;color:var(--muted);font:10px Arial,sans-serif;letter-spaci
 </div></section>
 </main>
 <footer><div class="wrap">Hành trình Việt hóa văn hóa cà phê · Chuyên đề văn hóa Việt Nam</div></footer>
+
+<script>
+(() => {
+  const sectionIds = ["du-nhap", "phin", "huong-vi", "hoi-nhap"];
+  let activeButton = null;
+
+  function stopReading() {
+    window.speechSynthesis.cancel();
+    if (activeButton) {
+      activeButton.classList.remove("is-speaking");
+      activeButton.textContent = "🔊 Nghe toàn bộ mục";
+      activeButton.setAttribute("aria-pressed", "false");
+      activeButton = null;
+    }
+  }
+
+  sectionIds.forEach((id) => {
+    const section = document.getElementById(id);
+    const heading = section && section.querySelector(".section-head");
+    if (!heading) return;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "listen-btn";
+    button.textContent = "🔊 Nghe toàn bộ mục";
+    button.setAttribute("aria-label", "Nghe đọc toàn bộ nội dung mục " + id);
+    button.setAttribute("aria-pressed", "false");
+
+    button.addEventListener("click", () => {
+      if (!("speechSynthesis" in window)) {
+        alert("Trình duyệt này chưa hỗ trợ đọc văn bản. Bạn hãy thử bằng Chrome hoặc Edge.");
+        return;
+      }
+      if (activeButton === button) {
+        stopReading();
+        return;
+      }
+      stopReading();
+
+      const content = section.cloneNode(true);
+      content.querySelectorAll("button, iframe, script, style").forEach((el) => el.remove());
+      const text = (content.innerText || content.textContent || "").replace(/\s+/g, " ").trim();
+      if (!text) return;
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "vi-VN";
+      utterance.rate = 0.95;
+      utterance.pitch = 1;
+      utterance.onend = stopReading;
+      utterance.onerror = stopReading;
+
+      activeButton = button;
+      button.classList.add("is-speaking");
+      button.textContent = "⏹ Dừng đọc";
+      button.setAttribute("aria-pressed", "true");
+      window.speechSynthesis.speak(utterance);
+    });
+
+    heading.appendChild(button);
+  });
+
+  window.addEventListener("beforeunload", () => window.speechSynthesis.cancel());
+})();
+</script>
+
 </body></html>
